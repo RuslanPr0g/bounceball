@@ -15,6 +15,9 @@ const centerY = canvas.height / 2;
 const holeSize = Math.PI / 16;
 const innerBoundaries = [];
 
+let startTime;
+let leaderboard = [];
+
 function getRandomColor() {
     const r = Math.floor(Math.random() * 256);
     const g = Math.floor(Math.random() * 256);
@@ -55,6 +58,7 @@ class Circle {
         this.outerMostBoundary = innerBoundaries.length - 1;
         this.mass = 1;
         this.passedBoundaries = new Set();
+        this.startTime = Date.now();
     }
 
     update(otherCircles) {
@@ -98,6 +102,9 @@ class Circle {
 
         // Check if the ball has escaped all boundaries
         if (distance > innerBoundaries[0].radius + this.radius) {
+            const escapeTime = (Date.now() - this.startTime) / 1000;
+            leaderboard.push({ color: this.color, time: escapeTime });
+            leaderboard.sort((a, b) => a.time - b.time); // Sort the leaderboard
             playSound(escapeSound);
             return false;
         }
@@ -111,7 +118,7 @@ class Circle {
 
                 if (distance < this.radius + other.radius) {
                     this.resolveCollision(other);
-                    playSound(collisionSound);
+                    // playSound(collisionSound);
                 }
             }
         }
@@ -228,22 +235,50 @@ function drawBoundaries() {
     });
 }
 
+function drawLeaderboard() {
+    ctx.fillStyle = 'white';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('Leaderboard:', 10, 30);
+    leaderboard.slice(0, 5).forEach((entry, index) => {
+        ctx.fillStyle = entry.color;
+        ctx.fillText(`${index + 1}. ${entry.time}s`, 10, 60 + index * 30);
+    });
+}
+
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     drawBoundaries();
+    drawLeaderboard();
+    
+    const currentTime = (Date.now() - startTime) / 1000;
+    ctx.fillStyle = 'white';
+    ctx.font = '24px Arial';
+    ctx.textAlign = 'right';
+    ctx.fillText(`Time: ${currentTime.toFixed(2)}s`, canvas.width - 10, 30);
+    
+    // const totalBalls = circles.length + leaderboard.length;
+    // ctx.fillText(`Balls: ${circles.length}/${totalBalls}`, canvas.width - 10, 60);
+    // ctx.fillText(`Escaped: ${leaderboard.length}`, canvas.width - 10, 90);
+    
     circles.forEach((circle, index) => {
         if (!circle.update(circles)) {
-            circles.splice(index, 1); // Remove escaped circles
+            circles.splice(index, 1);
         }
     });
 
-    // Regenerate holes for the main boundary
     if (innerBoundaries[0].holes.length > 0) {
-        innerBoundaries[0].holes = innerBoundaries[0].holes.filter(() => Math.random() > 0.01); // 1% chance to remove a hole each frame
+        innerBoundaries[0].holes = innerBoundaries[0].holes.filter(() => Math.random() > 0.01);
     }
     
-    requestAnimationFrame(animate);
+    if (circles.length === 0) {
+        setTimeout(() => {
+            showRestartButton();
+        }, 1000);
+    } else {
+        requestAnimationFrame(animate);
+    }
 }
 
 canvas.addEventListener('click', (event) => {
@@ -260,5 +295,31 @@ canvas.addEventListener('click', (event) => {
     }
 });
 
+function addRandomBalls() {
+    const ballCount = Math.floor(Math.random() * 3) + 4; // 2 to 4 balls
+    for (let i = 0; i < ballCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * (innerBoundaries[innerBoundaries.length - 1].radius - 40);
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+        circles.push(new Circle(x, y));
+    }
+}
+
+function showRestartButton() {
+    const button = document.createElement('button');
+    button.textContent = 'Restart Game';
+    button.style.position = 'absolute';
+    button.style.top = '50%';
+    button.style.left = '50%';
+    button.style.transform = 'translate(-50%, -50%)';
+    button.style.fontSize = '24px';
+    button.style.padding = '10px 20px';
+    button.onclick = () => location.reload();
+    document.body.appendChild(button);
+}
+
 createInnerBoundaries();
+addRandomBalls();
+startTime = Date.now();
 animate();
