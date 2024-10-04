@@ -17,6 +17,11 @@ const innerBoundaries = [];
 
 let startTime;
 let leaderboard = [];
+let mediaRecorder;
+let recordedChunks = [];
+let audioContext;
+let audioDestination;
+let audioSources = new Map();
 
 function getRandomColor() {
     const r = Math.floor(Math.random() * 256);
@@ -273,6 +278,7 @@ function animate() {
     }
     
     if (circles.length === 0) {
+        stopRecording();
         setTimeout(() => {
             showRestartButton();
         }, 1000);
@@ -307,19 +313,76 @@ function addRandomBalls() {
 }
 
 function showRestartButton() {
-    const button = document.createElement('button');
-    button.textContent = 'Restart Game';
-    button.style.position = 'absolute';
-    button.style.top = '50%';
-    button.style.left = '50%';
-    button.style.transform = 'translate(-50%, -50%)';
-    button.style.fontSize = '24px';
-    button.style.padding = '10px 20px';
-    button.onclick = () => location.reload();
-    document.body.appendChild(button);
+    stopRecording();
+    setTimeout(() => {
+        startGame();
+    }, 3000); // Wait 3 seconds before starting a new game
 }
 
-createInnerBoundaries();
-addRandomBalls();
-startTime = Date.now();
-animate();
+async function setupAudio() {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    audioDestination = audioContext.createMediaStreamDestination();
+
+    document.querySelectorAll('audio').forEach(audio => {
+        if (!audioSources.has(audio)) {
+            const source = audioContext.createMediaElementSource(audio);
+            source.connect(audioDestination);
+            source.connect(audioContext.destination); // To still hear the audio
+            audioSources.set(audio, source);
+        }
+    });
+}
+
+async function startRecording(canvas) {
+    await setupAudio();
+    const stream = canvas.captureStream(120); // 60 FPS
+
+    // Combine video and audio streams
+    const combinedStream = new MediaStream([
+        ...stream.getVideoTracks(),
+        ...audioDestination.stream.getAudioTracks()
+    ]);
+
+    // Set up MediaRecorder with WebM
+    const options = { mimeType: 'video/webm' };
+    mediaRecorder = new MediaRecorder(combinedStream, options);
+
+    mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+            recordedChunks.push(event.data);
+        }
+    };
+
+    mediaRecorder.onstop = saveVideo;
+
+    mediaRecorder.start();
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+}
+
+function saveVideo() {
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    document.body.appendChild(a);
+    a.style.display = 'none';
+    a.href = url;
+    a.download = `game_${Date.now()}.webm`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    recordedChunks = [];
+}
+
+function startGame() {
+    createInnerBoundaries();
+    addRandomBalls();
+    startTime = Date.now();
+    startRecording(canvas);
+    animate();
+}
+
+startGame();
