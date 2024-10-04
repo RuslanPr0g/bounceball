@@ -1,5 +1,8 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const bounceSound = document.getElementById('bounceSound');
+const escapeSound = document.getElementById('escapeSound');
+const collisionSound = document.getElementById('collisionSound');
 
 canvas.width = Math.min(window.innerWidth, window.innerHeight) - 20;
 canvas.height = canvas.width;
@@ -33,6 +36,11 @@ function createInnerBoundaries() {
             holes: []
         });
     }
+}
+
+function playSound(audio) {
+    audio.currentTime = 0;
+    audio.play().catch(e => console.error("Error playing sound:", e));
 }
 
 class Circle {
@@ -90,6 +98,7 @@ class Circle {
 
         // Check if the ball has escaped all boundaries
         if (distance > innerBoundaries[0].radius + this.radius) {
+            playSound(escapeSound);
             return false;
         }
 
@@ -102,6 +111,7 @@ class Circle {
 
                 if (distance < this.radius + other.radius) {
                     this.resolveCollision(other);
+                    playSound(collisionSound);
                 }
             }
         }
@@ -144,6 +154,9 @@ class Circle {
             this.x -= nx * overlap;
             this.y -= ny * overlap;
         }
+
+        // Play the bounce sound
+        playSound(bounceSound);
     }
 
     draw() {
