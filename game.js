@@ -315,7 +315,8 @@ function addRandomBalls() {
 function showRestartButton() {
     stopRecording();
     setTimeout(() => {
-        startGame();
+        // startGame();
+        window.location.reload();
     }, 3000); // Wait 3 seconds before starting a new game
 }
 
