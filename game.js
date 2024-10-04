@@ -14,6 +14,8 @@ const centerY = canvas.height / 2;
 const holeAngle = Math.PI / 4; // Position of the hole
 const holeSize = Math.PI / 8; // Increased hole size
 
+const temporaryHoles = [];
+
 function getRandomColor() {
     const r = Math.floor(Math.random() * 256);
     const g = Math.floor(Math.random() * 256);
@@ -29,7 +31,6 @@ class Circle {
         this.dx = (Math.random() - 0.5) * 8; // Increased initial speed
         this.dy = (Math.random() - 0.5) * 8; // Increased initial speed
         this.color = getRandomColor();
-        this.mass = 1; // Add mass for collision calculations
     }
 
     draw() {
@@ -40,15 +41,16 @@ class Circle {
         ctx.closePath();
     }
 
-    update(circles) {
+    update() {
         const dx = this.x - centerX;
         const dy = this.y - centerY;
         const distance = Math.sqrt(dx * dx + dy * dy);
         const angle = Math.atan2(dy, dx);
 
-        // Check if the circle is near the hole
+        // Check if the circle is near the permanent hole or any temporary hole
         if (distance + this.radius > boundaryRadius &&
-            Math.abs(angle - holeAngle) < holeSize / 2) {
+            (Math.abs(angle - holeAngle) < holeSize / 2 || 
+             temporaryHoles.some(hole => Math.abs(angle - hole.angle) < hole.size / 2))) {
             return false; // Circle escaped, remove it
         }
 
@@ -74,47 +76,13 @@ class Circle {
             const scale = (boundaryRadius - this.radius) / distance;
             this.x = centerX + dx * scale;
             this.y = centerY + dy * scale;
-        }
 
-        // Check collisions with other circles
-        for (let other of circles) {
-            if (other !== this) {
-                const dx = other.x - this.x;
-                const dy = other.y - this.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance < this.radius + other.radius) {
-                    // Collision detected, calculate new velocities
-                    const angle = Math.atan2(dy, dx);
-                    const sin = Math.sin(angle);
-                    const cos = Math.cos(angle);
-
-                    // Rotate velocity vectors
-                    const vx1 = this.dx * cos + this.dy * sin;
-                    const vy1 = this.dy * cos - this.dx * sin;
-                    const vx2 = other.dx * cos + other.dy * sin;
-                    const vy2 = other.dy * cos - other.dx * sin;
-
-                    // Collision reaction
-                    const vx1Final = ((this.mass - other.mass) * vx1 + 2 * other.mass * vx2) / (this.mass + other.mass);
-                    const vx2Final = ((other.mass - this.mass) * vx2 + 2 * this.mass * vx1) / (this.mass + other.mass);
-
-                    // Rotate velocities back
-                    this.dx = vx1Final * cos - vy1 * sin;
-                    this.dy = vy1 * cos + vx1Final * sin;
-                    other.dx = vx2Final * cos - vy2 * sin;
-                    other.dy = vy2 * cos + vx2Final * sin;
-
-                    // Move circles apart to prevent sticking
-                    const overlap = this.radius + other.radius - distance;
-                    const moveX = overlap * Math.cos(angle) / 2;
-                    const moveY = overlap * Math.sin(angle) / 2;
-                    this.x -= moveX;
-                    this.y -= moveY;
-                    other.x += moveX;
-                    other.y += moveY;
-                }
-            }
+            // Create a temporary hole
+            temporaryHoles.push({
+                angle: angle,
+                size: Math.PI / 16,
+                timeLeft: 5000 // 5 seconds
+            });
         }
 
         // Update position
@@ -134,24 +102,42 @@ function drawBoundary() {
     ctx.stroke();
     ctx.closePath();
 
-    // Draw the hole
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, boundaryRadius, holeAngle - holeSize / 2, holeAngle + holeSize / 2);
-    ctx.strokeStyle = 'black';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.closePath();
+    // // Draw the permanent hole
+    // ctx.beginPath();
+    // ctx.arc(centerX, centerY, boundaryRadius, holeAngle - holeSize / 2, holeAngle + holeSize / 2);
+    // ctx.strokeStyle = 'black';
+    // ctx.lineWidth = 3;
+    // ctx.stroke();
+    // ctx.closePath();
+
+    // Draw temporary holes
+    temporaryHoles.forEach(hole => {
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, boundaryRadius, hole.angle - hole.size / 2, hole.angle + hole.size / 2);
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.closePath();
+    });
 }
 
-function animate() {
+function animate(timestamp) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     drawBoundary();
     circles.forEach((circle, index) => {
-        if (!circle.update(circles)) {
+        if (!circle.update()) {
             circles.splice(index, 1); // Remove escaped circles
         }
     });
+
+    // Update and remove expired temporary holes
+    for (let i = temporaryHoles.length - 1; i >= 0; i--) {
+        temporaryHoles[i].timeLeft -= 16; // Assuming 60 FPS
+        if (temporaryHoles[i].timeLeft <= 0) {
+            temporaryHoles.splice(i, 1);
+        }
+    }
     
     requestAnimationFrame(animate);
 }
