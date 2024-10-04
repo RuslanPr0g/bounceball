@@ -45,6 +45,8 @@ class Circle {
         this.color = getRandomColor();
         this.currentBoundary = innerBoundaries.length - 1; // Start from the innermost circle
         this.mass = 1; // Add mass for collision calculations
+        this.passedBoundaries = new Set(); // Track passed boundaries
+        this.outerMostBoundary = innerBoundaries.length - 1;
     }
 
     draw() {
@@ -61,24 +63,43 @@ class Circle {
         let distance = Math.sqrt(dx * dx + dy * dy);
         let angle = Math.atan2(dy, dx);
 
-        const boundary = innerBoundaries[this.currentBoundary];
+        let bounced = false;
 
-        // Check if the circle is near any hole in the current boundary
-        const nearHole = boundary.holes.some(hole => Math.abs(angle - hole) < holeSize / 2);
+        // Check all boundaries the ball interacts with
+        for (let i = 0; i <= this.outerMostBoundary; i++) {
+            const boundary = innerBoundaries[i];
+            const isNearBoundary = Math.abs(distance - boundary.radius) < this.radius;
+            const nearHole = boundary.holes.some(hole => Math.abs(angle - hole) < holeSize / 2);
 
-        if (distance + this.radius > boundary.radius) {
-            if (nearHole) {
-                // Move to the next boundary
-                this.currentBoundary--;
-                if (this.currentBoundary < 0) {
-                    return false; // Ball escaped all boundaries
+            if (isNearBoundary) {
+                if (nearHole) {
+                    // Pass through the hole
+                    if (this.passedBoundaries.has(i)) {
+                        this.passedBoundaries.delete(i);
+                        if (i === this.currentBoundary) this.currentBoundary++;
+                    } else {
+                        this.passedBoundaries.add(i);
+                        if (i === this.currentBoundary) this.currentBoundary--;
+                    }
+                } else {
+                    // Bounce off the boundary
+                    this.bounceOff(centerX, centerY, boundary.radius);
+                    boundary.holes.push(angle);
+                    bounced = true;
+                    break; // Exit the loop after bouncing
                 }
-            } else {
-                this.bounceOff(centerX, centerY, boundary.radius);
-                
-                // Create a hole in the current boundary
-                boundary.holes.push(angle);
             }
+        }
+
+        // Update position only if not bounced
+        if (!bounced) {
+            this.x += this.dx;
+            this.y += this.dy;
+        }
+
+        // Check if the ball has escaped all boundaries
+        if (distance > innerBoundaries[0].radius + this.radius) {
+            return false;
         }
 
         // Bounce off other circles
@@ -93,10 +114,6 @@ class Circle {
                 }
             }
         }
-
-        // Update position
-        this.x += this.dx;
-        this.y += this.dy;
 
         this.draw();
         return true; // Circle stays in the game
